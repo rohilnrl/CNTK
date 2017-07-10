@@ -97,6 +97,9 @@
     <ClInclude Include="MemoryBuffer.h">
       <Filter>Utils</Filter>
     </ClInclude>
+    <ClInclude Include="V2Dependencies.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="NoRandomizer.cpp">

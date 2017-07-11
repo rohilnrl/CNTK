@@ -38,8 +38,9 @@ class IgnoreLabel(UserFunction):
         fg_pred[ignore_ind] = 0.0
         targets[ignore_ind] = 0
 
+        bg_pred.shape = (1,) + bg_pred.shape
+        fg_pred.shape = (1,) + fg_pred.shape
         clean_pred = np.vstack((bg_pred, fg_pred))
-        clean_pred.shape = (1,) + clean_pred.shape
         targets.shape = (1,) + targets.shape
 
         outputs[self.outputs[0]] = clean_pred

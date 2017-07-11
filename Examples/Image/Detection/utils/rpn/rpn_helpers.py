@@ -6,7 +6,8 @@
 
 import numpy as np
 import cntk as C
-from cntk import user_function, relu, softmax, reduce_sum, slice, splice, reshape, element_times, plus, alias
+from cntk import reduce_mean
+from cntk import user_function, relu, softmax, slice, splice, reshape, element_times, plus, minus, alias, classification_error
 from cntk.initializer import glorot_uniform, normal
 from cntk.layers import Convolution
 from cntk.losses import cross_entropy_with_softmax
@@ -55,10 +56,10 @@ def create_rpn(conv_out, scaled_gt_boxes, im_info, add_loss_functions=True,
                                 init = normal(scale=0.01), init_bias=conv_bias_init)(rpn_conv_3x3)  # 4(coords) * 9(anchors)
 
     # apply softmax to get (bg, fg) probabilities and reshape predictions back to grid of (18, H, W)
-    num_predictions = int(np.prod(rpn_cls_score.shape) / 2)
-    rpn_cls_score_rshp = reshape(rpn_cls_score, (2, num_predictions))
-    rpn_cls_prob = softmax(rpn_cls_score_rshp, axis=0, name="objness_softmax")
-    rpn_cls_prob_reshape = reshape(rpn_cls_prob, rpn_cls_score.shape)
+    num_predictions = int(rpn_cls_score.shape[0] / 2)
+    rpn_cls_score_rshp = reshape(rpn_cls_score, (2, num_predictions, rpn_cls_score.shape[1], rpn_cls_score.shape[2]), name="rpn_cls_score_rshp")
+    rpn_cls_prob = softmax(rpn_cls_score_rshp, axis=0, name="rpn_cls_prob")
+    rpn_cls_prob_reshape = reshape(rpn_cls_prob, rpn_cls_score.shape, name="rpn_cls_prob_reshape")
 
     # proposal layer
     rpn_rois_raw = user_function(ProposalLayer(rpn_cls_prob_reshape, rpn_bbox_pred, im_info, param_str=proposal_layer_param_string))
@@ -73,21 +74,36 @@ def create_rpn(conv_out, scaled_gt_boxes, im_info, add_loss_functions=True,
         rpn_bbox_targets = atl.outputs[1]
         rpn_bbox_inside_weights = atl.outputs[2]
 
-        # For loss functions: ignore label predictions for the 'ignore label',
-        # i.e. set target and prediction to 0 --> needs to be softmaxed before
-        rpn_labels_rshp = reshape(rpn_labels, (1, num_predictions))
-        ignore = user_function(IgnoreLabel(rpn_cls_prob, rpn_labels_rshp, ignore_label=-1))
-        rpn_cls_prob_ignore = ignore.outputs[0]
-        fg_targets = ignore.outputs[1]
-        bg_targets = 1 - fg_targets
-        rpn_labels_ignore = splice(bg_targets, fg_targets, axis=0)
+        if False:
+            # For loss functions: ignore label predictions for the 'ignore label',
+            # i.e. set target and prediction to 0 --> needs to be softmaxed before
+            ignore = user_function(IgnoreLabel(rpn_cls_score_rshp, rpn_labels, ignore_label=-1))
+            rpn_cls_score_ignore = ignore.outputs[0]
+            fg_targets = ignore.outputs[1]
+            bg_targets = 1 - fg_targets
+            rpn_labels_ignore = splice(bg_targets, fg_targets, axis=0)
 
-        # RPN losses
-        rpn_loss_cls = cross_entropy_with_softmax(rpn_cls_prob_ignore, rpn_labels_ignore, axis=0)
+            # RPN losses
+            rpn_loss_cls = cross_entropy_with_softmax(rpn_cls_score_ignore, rpn_labels_ignore, axis=0)
+        else:
+            keeps = C.greater_equal(rpn_labels, 0.0)
+            # !! These two lines yield negative loss !!
+            #rpn_labels = element_times(rpn_labels, keeps)
+            #rpn_ce = cross_entropy_with_softmax(rpn_cls_score_rshp, rpn_labels, axis=0)
+            fg_labels = element_times(rpn_labels, keeps, name="fg_targets")
+            bg_labels = minus(1, fg_labels, name="bg_targets")
+            rpn_labels_ignore = splice(bg_labels, fg_labels, axis=0)
+            rpn_ce = cross_entropy_with_softmax(rpn_cls_score_rshp, rpn_labels_ignore, axis=0)
+            rpn_loss_cls = element_times(rpn_ce, keeps)
+
         rpn_loss_bbox = SmoothL1Loss(1.0, rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights, 1.0)
-        rpn_losses = plus(reduce_sum(rpn_loss_cls), reduce_sum(rpn_loss_bbox), name="rpn_losses")
+        rpn_losses = plus(reduce_mean(rpn_loss_cls),
+                          element_times(cfg["CNTK"].LAMBDA_RPN_REGR_LOSS, reduce_mean(rpn_loss_bbox)),
+                          #reduce_mean(rpn_loss_bbox),
+                          name="rpn_losses")
+        rpn_pred_error = classification_error(rpn_cls_score_rshp, rpn_labels_ignore, axis=0, name="rpn_pred_error")
 
-    return rpn_rois, rpn_losses
+    return rpn_rois, rpn_losses, rpn_pred_error
 
 def create_proposal_target_layer(rpn_rois, scaled_gt_boxes, num_classes):
     '''
@@ -115,9 +131,14 @@ def create_proposal_target_layer(rpn_rois, scaled_gt_boxes, num_classes):
     ptl = user_function(ProposalTargetLayer(rpn_rois, scaled_gt_boxes, param_str=ptl_param_string))
 
     rois = alias(ptl.outputs[0], name='rpn_target_rois')
-    label_targets = alias(ptl.outputs[1], name='label_targets')
-    bbox_targets = alias(ptl.outputs[2], name='bbox_targets')
-    bbox_inside_weights = alias(ptl.outputs[3], name='bbox_inside_w')
+    label_targets = ptl.outputs[1]
+    bbox_targets = ptl.outputs[2]
+    bbox_inside_weights = ptl.outputs[3]
+
+    # use an alias if you need to access the outputs, e.g., when cloning a trained network
+    #label_targets = alias(ptl.outputs[1], name='label_targets')
+    #bbox_targets = alias(ptl.outputs[2], name='bbox_targets')
+    #bbox_inside_weights = alias(ptl.outputs[3], name='bbox_inside_w')
 
     return rois, label_targets, bbox_targets, bbox_inside_weights
 

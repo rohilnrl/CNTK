@@ -41,8 +41,10 @@ __C.CNTK.USE_MEAN_GRADIENT = False
 __C.CNTK.TRAIN_CONV_LAYERS = False
 
 __C.CNTK.DATASET = "Grocery" # "Grocery" or "Pascal"
-__C.CNTK.BASE_MODEL = "VGG16" # "VGG16" or "AlexNet"
+__C.CNTK.BASE_MODEL = "AlexNet" # "VGG16" or "AlexNet"
 __C.CNTK.CONV_BIAS_INIT = 0.0
+__C.CNTK.LAMBDA_RPN_REGR_LOSS = 10.0
+__C.CNTK.LAMBDA_DET_REGR_LOSS = 1.0
 
 # Learning parameters
 __C.CNTK.L2_REG_WEIGHT = 0.0005
@@ -53,18 +55,19 @@ __C.CNTK.MOMENTUM_PER_MB = 0.9
 # ==> CNTK: lr_per_sample = [0.001] * 10 + [0.0001] * 10 + [0.00001]
 # Current setting for CNTK on Grocery (AlexNet: 92.7 mAP, VGG 93.2 mAP):
 __C.CNTK.E2E_MAX_EPOCHS = 20
-__C.CNTK.E2E_LR_PER_SAMPLE = [0.001] * 10 + [0.0001] * 10 + [0.00001] # --> E2E_LR_FACTOR = 0.01
+__C.CNTK.E2E_LR_PER_SAMPLE = [0.001] * 10 + [0.0001] * 10 + [0.00001]
 
 # caffe rpn training: lr = [0.001] * 12 + [0.0001] * 4, momentum = 0.9, weight decay = 0.0005 (cf. stage1_rpn_solver60k80k.pt)
-__C.CNTK.RPN_EPOCHS = 4 # 16 # 4 epochs seems enough for CNTK
+__C.CNTK.RPN_EPOCHS = 16 # 4 epochs seems enough for CNTK (old code)
 __C.CNTK.RPN_LR_PER_SAMPLE = [0.001] * 12 + [0.0001] * 4
 
 # caffe frcn training: lr = [0.001] * 6 + [0.0001] * 2, momentum = 0.9, weight decay = 0.0005 (cf. stage1_fast_rcnn_solver30k40k.pt)
-#__C.CNTK.FRCN_EPOCHS = 8 # 20 rather for CNTK
-#__C.CNTK.FRCN_LR_PER_SAMPLE = [0.001] * 6 + [0.0001] * 2
+__C.CNTK.FRCN_EPOCHS = 20 # 8 # 20 rather for CNTK (old code)
+__C.CNTK.FRCN_LR_PER_SAMPLE = [0.001] * 6 + [0.0001] * 2
+# Old code:
 # Current setting for CNTK AlexNet:
-__C.CNTK.FRCN_EPOCHS = 20
-__C.CNTK.FRCN_LR_PER_SAMPLE = [0.001] * 8 + [0.0005] * 8 + [0.0001] # --> FRCN_LR_FACTOR = 0.01
+#__C.CNTK.FRCN_EPOCHS = 20
+#__C.CNTK.FRCN_LR_PER_SAMPLE = [0.001] * 8 + [0.0005] * 8 + [0.0001] # --> FRCN_LR_FACTOR = 0.01
 # Current setting for CNTK VGG16:
 #__C.CNTK.FRCN_EPOCHS = 20
 #__C.CNTK.FRCN_LR_PER_SAMPLE = [0.0000005] * 8 + [0.00000005] --> FRCN_LR_FACTOR = 0.0005
@@ -78,7 +81,7 @@ __C.CNTK.RESULTS_NMS_CONF_THRESHOLD = 0.0
 __C.CNTK.RESULTS_BGR_PLOT_THRESHOLD = 0.1
 
 __C.CNTK.GRAPH_TYPE = "png" # "png" or "pdf"
-__C.CNTK.VISUALIZE_RESULTS = False
+__C.CNTK.VISUALIZE_RESULTS = True
 __C.CNTK.DRAW_NEGATIVE_ROIS = False
 __C.CNTK.DRAW_UNREGRESSED_ROIS = False
 
@@ -129,9 +132,9 @@ if __C.CNTK.BASE_MODEL == "AlexNet":
     __C.CNTK.LAST_HIDDEN_NODE_NAME = "h2_d"
     __C.CNTK.RPN_NUM_CHANNELS = 256
     __C.CNTK.ROI_DIM = 6
-    __C.CNTK.E2E_LR_FACTOR = 0.01
-    __C.CNTK.RPN_LR_FACTOR = 1.0
-    __C.CNTK.FRCN_LR_FACTOR = 0.01
+    __C.CNTK.E2E_LR_FACTOR = 10.0
+    __C.CNTK.RPN_LR_FACTOR = 100.0
+    __C.CNTK.FRCN_LR_FACTOR = 20.0
 
 if __C.CNTK.BASE_MODEL == "VGG16":
     __C.CNTK.BASE_MODEL_FILE = "VGG16_ImageNet_Caffe.model" # == "VGG16_ImageNet.cntkmodel"
@@ -142,9 +145,9 @@ if __C.CNTK.BASE_MODEL == "VGG16":
     __C.CNTK.LAST_HIDDEN_NODE_NAME = "drop7"
     __C.CNTK.RPN_NUM_CHANNELS = 512
     __C.CNTK.ROI_DIM = 7
-    __C.CNTK.E2E_LR_FACTOR = 0.01
+    __C.CNTK.E2E_LR_FACTOR = 1.0
     __C.CNTK.RPN_LR_FACTOR = 1.0
-    __C.CNTK.FRCN_LR_FACTOR = 0.0005
+    __C.CNTK.FRCN_LR_FACTOR = 1.0
 
 #
 # Training options

@@ -2741,7 +2741,8 @@ public:
                               scale,                            // (in)  out of scale and bias, only scale is needed in gradient propagation
                               blendFactor,                      // (in)  smoothing weight for running stats (1=use only running stats)
                               *m_savedMean, *m_savedInvStdDev,  // (in)  saved mean/invstddev values used in ForwardProp()
-                              *m_dScale, *m_dBias);             // (out) gradients for scale and bias
+                              *m_dScale, *m_dBias,              // (out) gradients for scale and bias
+                              !Input(DATA)->IsGradientInitializedBy(this)); // whether data gradient should be accumulated
 
             m_gradientValid = true;
         }
@@ -2767,6 +2768,15 @@ public:
     }
 
     virtual bool OutputUsedInComputingInputNodesGradients() const override { return false; }
+
+    virtual ParentGradientOptimization ImplementsGradientOptimization(const ComputationNodeBase* input) const
+    {
+        auto iter = std::find_if(m_inputs.begin(), m_inputs.end(), [input](ComputationNodeBasePtr p) { return input == &*p; });
+        if (iter == m_inputs.end())
+            InvalidArgument("%ls is not an input of %ls.", input->NodeName().c_str(), NodeName().c_str());
+        auto inputIndex = iter - m_inputs.begin();
+        return (inputIndex == DATA || inputIndex == SCALE || inputIndex == BIAS) ? ParentGradientOptimization::Overwrite : ParentGradientOptimization::None;
+    }
 
     void Validate(bool isFinalValidationPass) override
     {
